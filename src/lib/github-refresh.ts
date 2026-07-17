@@ -4,7 +4,7 @@
 import { desc, eq } from "drizzle-orm";
 import { artifactQueries } from "@malloyyo/mcp-engine";
 import { db, datasets, malloyModels, malloyModelFiles, malloyArtifacts } from "@/db";
-import { GitHubURLReader, fetchGitHubFile, parseGitHubRepo } from "./github";
+import { GitHubURLReader, fetchGitHubFile, listGitHubDir, parseGitHubRepo } from "./github";
 import { introspectModelWithReader, withModelRuntime, fileUrl, type SourceInfo } from "./malloy";
 import { logger } from "./logger";
 
@@ -62,6 +62,24 @@ export async function refreshGitHubModel(datasetId: string): Promise<RefreshResu
 
   const allFiles = new Map(reader.fetched);
   if (malloyConfig) allFiles.set("malloy-config.json", malloyConfig);
+
+  // The model's own guidance topics (guidance/**/*.md) — the compiler never
+  // imports them, so the reader won't have fetched them; pull them explicitly.
+  // Same ingestion the CLI publish path does via gatherDirectory. Non-fatal:
+  // missing guidance never fails a refresh.
+  try {
+    const walkGuidance = async (dirPath: string): Promise<void> => {
+      for (const entry of await listGitHubDir(owner, repo, branch, dirPath, { useToken: ds.githubUseToken })) {
+        if (entry.type === "dir") await walkGuidance(entry.path);
+        else if (entry.name.endsWith(".md")) {
+          allFiles.set(entry.path, await fetchGitHubFile(owner, repo, branch, entry.path, { useToken: ds.githubUseToken }));
+        }
+      }
+    };
+    await walkGuidance("guidance");
+  } catch (e) {
+    logger.warn("refreshGitHubModel guidance ingestion failed (non-fatal)", { datasetId, error: e instanceof Error ? e.message : String(e) });
+  }
 
   if (allFiles.size > 0) {
     await db.insert(malloyModelFiles).values(
