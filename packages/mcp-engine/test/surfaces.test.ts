@@ -158,6 +158,11 @@ test('explore: query executes restricted text with givens', async () => {
   assert.equal(result.ok, true, JSON.stringify(result.problems));
   assert.deepEqual(result.rows, [{ v: 3 }]);
   assert.equal(result.sql, undefined, 'execute:true does not carry SQL (output, not input)');
+  assert.match(
+    result.result_integrity ?? '',
+    /COMPLETE RESULT: the query produced exactly 1 row/,
+    'every executed run carries its fidelity contract',
+  );
 });
 
 test('explore: executed query withholds SQL from the agent but keeps it on host_only', async () => {

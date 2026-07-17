@@ -19,6 +19,11 @@ import type { HelpTopic } from './types';
     front matter carries (used to index it in instructions and catalogs). */
 export interface GuidanceTopic extends HelpTopic {
   description?: string;
+  /** Front matter `pin: true` — a PINNED topic is standing rules: its whole
+      body is inlined into the instructions lead-block, not just indexed.
+      For the short must-always-hold rules (data fidelity, presentation);
+      long reference topics stay unpinned and ride yo_help. */
+  pinned?: boolean;
 }
 
 const GUIDANCE_DIR = 'guidance/';
@@ -39,14 +44,17 @@ function nameFromPath(path: string): string {
     .join('/');
 }
 
-/** Markdown with optional YAML-ish front matter carrying `description:`. */
+/** Markdown with optional YAML-ish front matter carrying `description:` and
+    `pin:` (true → inline the body in instructions, not just the index line). */
 function parseTopic(name: string, raw: string): GuidanceTopic {
   const m = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(raw);
   if (!m) return { name, body: raw.trim() };
-  const d = /^description:\s*(.+)$/m.exec(m[1] ?? '');
+  const front = m[1] ?? '';
+  const d = /^description:\s*(.+)$/m.exec(front);
   const topic: GuidanceTopic = { name, body: (m[2] ?? '').trim() };
   const description = d?.[1]?.trim();
   if (description) topic.description = description;
+  if (/^pin:\s*true\s*$/m.test(front)) topic.pinned = true;
   return topic;
 }
 
@@ -70,19 +78,22 @@ export function modelGuidanceTopics(
 }
 
 /**
- * The instructions lead-block announcing a model's guidance: the topic index
- * with each one-line description, and the read-first rule. Kept to one line
- * per topic — instructions are a capped, best-effort channel; the topics
- * themselves ride yo_help.
+ * The instructions lead-block announcing a model's guidance. PINNED topics
+ * (front matter `pin: true`) contribute their whole body — standing rules the
+ * agent must hold without a yo_help round trip. Everything else stays a
+ * one-line index entry (instructions are a capped, best-effort channel; the
+ * bodies ride yo_help). Pinned bodies lead; the index trails, and still lists
+ * the pinned names so an agent can re-read them by name.
  */
 export function guidanceInstructionsBlock(topics: GuidanceTopic[]): string {
   if (topics.length === 0) return '';
+  const pinned = topics.filter((t) => t.pinned && t.body).map((t) => t.body);
   const lines = topics.map(
     (t) => `- \`${t.name}\`${t.description ? ` — ${t.description}` : ''}`,
   );
-  return (
+  const index =
     'This model publishes its own guidance — domain rules that change the numbers. ' +
     'Read the relevant topic with yo_help BEFORE writing a query:\n' +
-    lines.join('\n')
-  );
+    lines.join('\n');
+  return [...pinned, index].join('\n\n');
 }

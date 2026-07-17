@@ -16,6 +16,7 @@ const FILES: Array<[string, string]> = [
   ['index.malloy', 'source: x is duckdb.table("t")'],
   ['guidance/sales.md', '---\ndescription: Which sales column wins\n---\nUse pre-tax.'],
   ['guidance/deep/Category Rules.md', 'Two hierarchies exist.'],
+  ['guidance/rules.md', '---\ndescription: standing rules\npin: true\n---\nNever invent rows.'],
   ['guidance/readme.txt', 'not markdown — ignored'],
   ['notes.md', 'outside guidance/ — ignored'],
 ];
@@ -24,11 +25,14 @@ test('modelGuidanceTopics: guidance/**.md only, path-named, front matter parsed'
   const topics = modelGuidanceTopics(FILES);
   assert.deepEqual(
     topics.map((t) => t.name),
-    ['guidance/deep/category-rules', 'guidance/sales'],
+    ['guidance/deep/category-rules', 'guidance/rules', 'guidance/sales'],
   );
   const sales = topics.find((t) => t.name === 'guidance/sales')!;
   assert.equal(sales.description, 'Which sales column wins');
   assert.equal(sales.body, 'Use pre-tax.');
+  assert.equal(sales.pinned, undefined, 'pin only when front matter says so');
+  const rules = topics.find((t) => t.name === 'guidance/rules')!;
+  assert.equal(rules.pinned, true);
 });
 
 test('modelGuidanceTopics: namespace prefixes every name', () => {
@@ -41,6 +45,16 @@ test('guidanceInstructionsBlock: one line per topic, empty for none', () => {
   const block = guidanceInstructionsBlock(modelGuidanceTopics(FILES));
   assert.match(block, /`guidance\/sales` — Which sales column wins/);
   assert.match(block, /BEFORE writing a query/);
+});
+
+test('guidanceInstructionsBlock: pinned topics inline their body ahead of the index', () => {
+  const block = guidanceInstructionsBlock(modelGuidanceTopics(FILES));
+  assert.match(block, /^Never invent rows\./, 'pinned body leads the block');
+  assert.ok(
+    block.indexOf('Never invent rows.') < block.indexOf('publishes its own guidance'),
+    'pinned rules come before the topic index',
+  );
+  assert.match(block, /`guidance\/rules` — standing rules/, 'pinned topic still indexed by name');
 });
 
 test('explore surface folds guidance into yo_help index, lookup, and instructions', async () => {
@@ -103,11 +117,18 @@ test('rawQueryTool: guards before the host, truncates honestly, surfaces DB erro
   assert.equal(calls.length, 0, 'guard fires before the host');
 
   const run = (await tool.handler({ sql: 'SELECT 1', max_rows: 7 })) as {
-    ok: boolean; row_count: number; truncated?: object;
+    ok: boolean; row_count: number; truncated?: object; result_integrity?: string;
   };
   assert.equal(run.ok, true);
   assert.equal(run.row_count, 7);
   assert.ok(run.truncated, 'total_rows > returned → truncated flag');
+  assert.match(run.result_integrity ?? '', /PARTIAL RESULT/, 'clipped run says so');
+
+  const complete = (await rawQueryTool({
+    runSQL: async () => ({ rows: [{ n: 1 }, { n: 2 }] }),
+  }).handler({ sql: 'SELECT 1' })) as { result_integrity?: string };
+  assert.match(complete.result_integrity ?? '', /COMPLETE RESULT: the query produced exactly 2 row/);
+  assert.match(complete.result_integrity ?? '', /never add, merge, or invent rows/i);
 
   const failing = rawQueryTool({
     runSQL: async () => { throw new Error('Catalog Error: table nope does not exist'); },

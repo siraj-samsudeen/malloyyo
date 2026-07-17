@@ -107,6 +107,7 @@ export { prepareSource, type PreparedSource, type SourceInput } from './prepare-
 export {
   toContent,
   mergeSurfaces,
+  resultIntegrity,
   yoHelpTool,
   DEFAULT_RESULT_BYTES,
   type ResultPolicy,

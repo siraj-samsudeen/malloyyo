@@ -12,7 +12,7 @@
 import { codeProblem } from '../problems';
 import { prompts } from '../prompts';
 import { checkSelectOnly } from '../sql-guard';
-import { argOptNumber, argOptString, argString, type ToolDef } from './shared';
+import { argOptNumber, argOptString, argString, resultIntegrity, type ToolDef } from './shared';
 
 export const RAW_QUERY_DEFAULT_ROWS = 100;
 export const RAW_QUERY_MAX_ROWS = 1000;
@@ -79,9 +79,15 @@ export function rawQueryTool(host: RawQueryHost): ToolDef {
         const res = await host.runSQL(argOptString(args, 'model_ref'), sql, rowLimit);
         const rows = res.rows.slice(0, rowLimit);
         const out: Record<string, unknown> = { ok: true, row_count: rows.length, rows };
-        if ((res.total_rows ?? res.rows.length) > rows.length) {
+        const clipped = (res.total_rows ?? res.rows.length) > rows.length;
+        if (clipped) {
           out.truncated = { row_limit: rowLimit, note: 'increase max_rows or aggregate in SQL' };
         }
+        // The same fidelity contract every executed query result carries.
+        out.result_integrity = resultIntegrity(
+          rows.length,
+          clipped ? { reason: `row limit ${rowLimit}` } : undefined,
+        );
         return out;
       } catch (e) {
         // Database errors verbatim — the error text is how an agent self-corrects.

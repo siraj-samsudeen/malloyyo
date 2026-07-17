@@ -304,6 +304,10 @@ export interface RunResult {
   /** Rows actually present in `rows` after budgeting. */
   rows_returned?: number;
   truncated?: TruncationInfo;
+  /** The data-fidelity contract for THIS result (resultIntegrity): whether the
+      rows above are the complete set, and how they must be presented. Attached
+      to every executed run — the result is the one channel a client re-reads. */
+  result_integrity?: string;
   compile_time_ms?: number;
   total_time_ms?: number;
   /**

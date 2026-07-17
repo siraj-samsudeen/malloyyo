@@ -45,6 +45,40 @@ export interface ResultPolicy {
 
 export const DEFAULT_RESULT_BYTES = 25_000;
 
+// ── the result-integrity contract ────────────────────────────────────
+//
+// Small models fail results in two observed ways: they RE-TYPE rows from
+// memory (inventing plausible ones when attention slips) and they volunteer
+// TOTALS they computed by eyeballing the table (or didn't compute at all).
+// Instructions alone don't stop it — the tool RESULT is the one channel every
+// client re-reads on every turn, so the fidelity contract rides the result
+// itself, as a factual footer field, not prose prepended to the JSON.
+
+/**
+ * The data-fidelity line for one executed result: whether `rows` is the
+ * complete set, and how it must be presented. Attach to every executed
+ * run (`query` execute:true, `run_query`).
+ */
+export function resultIntegrity(
+  rowsShown: number,
+  truncated?: { reason?: string } | undefined,
+): string {
+  if (truncated) {
+    return (
+      `PARTIAL RESULT: only the first ${rowsShown} row(s) of a larger set are shown` +
+      `${truncated.reason ? ` (${truncated.reason})` : ''}. Disclose the truncation when ` +
+      'presenting — NEVER fill in or guess the missing rows; re-query with a higher ' +
+      'max_rows, a filter, or an aggregation instead.'
+    );
+  }
+  return (
+    `COMPLETE RESULT: the query produced exactly ${rowsShown} row(s), all shown. ` +
+    'Present rows and formatted values VERBATIM — never add, merge, or invent rows. ' +
+    'Any total or subtotal you state must come from its own query result, never ' +
+    'from adding displayed rows yourself.'
+  );
+}
+
 /** Serializer: typed result → MCP content + structuredContent. Two reserved
     fields are special-cased:
     - `malloy_text` is lifted OUT into its own clean text block (verbatim Malloy)

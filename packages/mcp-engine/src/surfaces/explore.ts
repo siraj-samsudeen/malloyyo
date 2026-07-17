@@ -43,6 +43,7 @@ import {
   argOptString,
   argRecord,
   argString,
+  resultIntegrity,
   sharedSkills,
   withHelp,
   yoHelpTool,
@@ -137,7 +138,16 @@ async function executeQuery(
   }
   const full = await runRestricted(m.runtime, m.entry, malloy, { rowLimit, givens });
   const budgeted = await applyResultBudget(full, result, { toolName: 'query', args });
-  return { ...budgeted, problems: budgeted.problems.map(fix) };
+  const out = { ...budgeted, problems: budgeted.problems.map(fix) };
+  // Every executed result carries its fidelity contract (see resultIntegrity):
+  // is `rows` the complete set, and how it must be presented.
+  if (out.ok && out.rows) {
+    out.result_integrity = resultIntegrity(
+      out.rows_returned ?? out.row_count ?? out.rows.length,
+      out.truncated,
+    );
+  }
+  return out;
 }
 
 /** Model_ref-based query tool — one definition the develop surface reuses
