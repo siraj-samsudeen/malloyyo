@@ -17,19 +17,7 @@ export class UnauthorizedError extends Error {
  * Returns the currently signed-in user, ensuring they have a slug.
  * Throws UnauthorizedError if no session exists.
  */
-// Fail-open by design: an unset EMAIL_ALLOW_LIST allows any authenticated user.
-// Exported so the MCP endpoint (which authorizes by OAuth token, not session)
-// enforces the same allow-list the web routes do — otherwise removing a user
-// from the list wouldn't cut off their existing MCP tokens.
-export function isEmailAllowed(email: string | null | undefined): boolean {
-  const allowList = process.env.EMAIL_ALLOW_LIST;
-  if (!allowList) return true;
-  const allowed = allowList.split(",").map((e) => e.trim().toLowerCase());
-  const em = (email ?? "").toLowerCase();
-  // Entries beginning with "@" are domain rules: "@example.com" admits every
-  // account on that domain (exact entries still work beside them).
-  return allowed.some((a) => (a.startsWith("@") ? em.endsWith(a) : em === a));
-}
+export { isEmailAllowed } from "./allowlist";
 
 export async function getSessionUser(): Promise<User> {
   const session = await auth();
