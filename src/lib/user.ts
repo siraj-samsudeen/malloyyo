@@ -25,7 +25,10 @@ export function isEmailAllowed(email: string | null | undefined): boolean {
   const allowList = process.env.EMAIL_ALLOW_LIST;
   if (!allowList) return true;
   const allowed = allowList.split(",").map((e) => e.trim().toLowerCase());
-  return allowed.includes((email ?? "").toLowerCase());
+  const em = (email ?? "").toLowerCase();
+  // Entries beginning with "@" are domain rules: "@example.com" admits every
+  // account on that domain (exact entries still work beside them).
+  return allowed.some((a) => (a.startsWith("@") ? em.endsWith(a) : em === a));
 }
 
 export async function getSessionUser(): Promise<User> {
