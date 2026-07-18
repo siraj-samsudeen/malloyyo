@@ -17,7 +17,8 @@ export class UnauthorizedError extends Error {
  * Returns the currently signed-in user, ensuring they have a slug.
  * Throws UnauthorizedError if no session exists.
  */
-export { isEmailAllowed } from "./allowlist";
+import { isEmailAllowed } from "./allowlist";
+export { isEmailAllowed };
 
 export async function getSessionUser(): Promise<User> {
   const session = await auth();
